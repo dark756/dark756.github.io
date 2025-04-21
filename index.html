@@ -1,190 +1,87 @@
-<!DOCTYPE html>
-<html lang="en">
-<head>
-  <meta charset="UTF-8" />
-  <meta name="viewport" content="width=device-width, initial-scale=1.0"/>
-  <title>15 Puzzle Solver - Branch and Bound</title>
-  <style>
-    body {
-      font-family: sans-serif;
-      display: flex;
-      flex-direction: column;
-      align-items: center;
-      padding: 20px;
-    }
-    #puzzle-container {
-      display: flex;
-      flex-direction: column;
-      align-items: center;
-      gap: 30px;
-      margin-bottom: 20px;
-    }
-    .puzzle {
-      display: grid;
-      grid-template-columns: repeat(4, 80px);
-      grid-template-rows: repeat(4, 80px);
-      gap: 5px;
-      margin-bottom: 10px;
-    }
-    .tile {
-      width: 80px;
-      height: 80px;
-      display: flex;
-      align-items: center;
-      justify-content: center;
-      background-color: #ccc;
-      font-size: 24px;
-      font-weight: bold;
-      cursor: default;
-    }
-    .empty {
-      background-color: #fff;
-    }
-    button {
-      margin: 5px;
-      padding: 10px 20px;
-      font-size: 16px;
-    }
-    #loading {
-      display: none;
-      font-size: 18px;
-      margin-top: 20px;
-    }
-    .arrow {
-      font-size: 24px;
-      margin-top: 10px;
-    }
-    .step-container {
-      display: flex;
-      align-items: center;
-      gap: 10px;
-    }
-  </style>
-</head>
-<body>
-  <h1>15 Puzzle Solver - Branch and Bound</h1>
-  <div id="puzzle-container"></div>
-  <button onclick="solvePuzzle()">Solve Puzzle</button>
-  <div id="loading">Solving the puzzle... Please wait!</div>
+function solvePuzzle() {
+  if (!isSolvable(currentState)) {
+    alert("Puzzle is not solvable!");
+    return;
+  }
 
-  <script>
-    const puzzleContainer = document.getElementById("puzzle-container");
-    const loading = document.getElementById("loading");
+  // Show loading message
+  loading.style.display = "block";
 
-    // Hardcoded puzzle state
-    const currentState = [
-      1, 2, 3, 4,
-      5, 6, 0, 8,
-      9, 10, 7, 11,
-      13, 14, 15, 12
-    ];
+  // Initialize Web Worker for solving
+  const worker = new Worker("solver.js");
 
-    // Define directions for arrows
-    const directionArrows = {
-      up: "↑",
-      down: "↓",
-      left: "←",
-      right: "→"
-    };
+  worker.postMessage({ puzzle: currentState });
 
-    function createPuzzle(state) {
-      const puzzle = document.createElement("div");
-      puzzle.classList.add("puzzle");
-
-      state.forEach((val) => {
-        const tile = document.createElement("div");
-        tile.className = "tile" + (val === 0 ? " empty" : "");
-        tile.textContent = val === 0 ? "" : val;
-        puzzle.appendChild(tile);
-      });
-
-      return puzzle;
+  // Receive solved steps and rejected moves from the Web Worker
+  worker.onmessage = function (event) {
+    const { solution, rejectedMoves } = event.data;
+    if (!solution) {
+      alert("No solution found!");
+      loading.style.display = "none";
+      return;
     }
 
-    function isSolvable(puzzle) {
-      let invCount = 0;
-      for (let i = 0; i < 15; i++) {
-        for (let j = i + 1; j < 16; j++) {
-          if (puzzle[i] && puzzle[j] && puzzle[i] > puzzle[j]) invCount++;
-        }
-      }
-      const rowFromBottom = 3 - Math.floor(puzzle.indexOf(0) / 4);
-      return (invCount + rowFromBottom) % 2 === 0;
-    }
+    // Display solution steps
+    let i = 0;
+    const interval = setInterval(() => {
+      if (i > 0) {
+        // Calculate direction of move
+        const prevState = solution[i - 1];
+        const currState = solution[i];
+        
+        const zeroPrev = prevState.indexOf(0);
+        const zeroCurr = currState.indexOf(0);
+        const prevRow = Math.floor(zeroPrev / 4);
+        const prevCol = zeroPrev % 4;
+        const currRow = Math.floor(zeroCurr / 4);
+        const currCol = zeroCurr % 4;
 
-    function solvePuzzle() {
-      if (!isSolvable(currentState)) {
-        alert("Puzzle is not solvable!");
-        return;
+        let direction = '';
+        if (currRow === prevRow - 1) direction = directionArrows.up;
+        else if (currRow === prevRow + 1) direction = directionArrows.down;
+        else if (currCol === prevCol - 1) direction = directionArrows.left;
+        else if (currCol === prevCol + 1) direction = directionArrows.right;
+
+        const arrowDiv = document.createElement("div");
+        arrowDiv.className = "arrow";
+        arrowDiv.textContent = direction;
+        puzzleContainer.appendChild(arrowDiv);
       }
 
-      // Show loading message
-      loading.style.display = "block";
+      // Display current puzzle state
+      const puzzle = createPuzzle(solution[i]);
+      const stepContainer = document.createElement("div");
+      stepContainer.classList.add("step-container");
+      stepContainer.appendChild(puzzle);
 
-      // Initialize Web Worker for solving
-      const worker = new Worker("solver.js");
+      puzzleContainer.appendChild(stepContainer);
+      i++;
+      if (i >= solution.length) {
+        clearInterval(interval);
+        loading.style.display = "none"; // Hide loading message after solving
+      }
+    }, 1000);
 
-      worker.postMessage({ puzzle: currentState });
+    // Display rejected moves
+    const rejectedContainer = document.createElement("div");
+    rejectedContainer.className = "rejected-moves";
+    rejectedContainer.innerHTML = "<h3>Rejected Moves:</h3>";
 
-      // Receive solved steps from the Web Worker
-      worker.onmessage = function (event) {
-        const solution = event.data;
-        if (!solution) {
-          alert("No solution found!");
-          loading.style.display = "none";
-          return;
-        }
+    rejectedMoves.forEach(rejected => {
+      const rejectedDiv = document.createElement("div");
+      rejectedDiv.className = "rejected-move";
+      rejectedDiv.innerHTML = `
+        <p>Move: ${rejected.state.join(", ")}</p>
+        <p>Reason: ${rejected.reason}</p>
+      `;
+      rejectedContainer.appendChild(rejectedDiv);
+    });
 
-        // Display steps one by one with arrows
-        let i = 0;
-        const interval = setInterval(() => {
-          if (i > 0) {
-            // Calculate direction of move
-            const prevState = solution[i - 1];
-            const currState = solution[i];
+    puzzleContainer.appendChild(rejectedContainer);
+  };
 
-            const zeroPrev = prevState.indexOf(0);
-            const zeroCurr = currState.indexOf(0);
-            const prevRow = Math.floor(zeroPrev / 4);
-            const prevCol = zeroPrev % 4;
-            const currRow = Math.floor(zeroCurr / 4);
-            const currCol = zeroCurr % 4;
-
-            let direction = '';
-            if (currRow === prevRow - 1) direction = directionArrows.up;
-            else if (currRow === prevRow + 1) direction = directionArrows.down;
-            else if (currCol === prevCol - 1) direction = directionArrows.left;
-            else if (currCol === prevCol + 1) direction = directionArrows.right;
-
-            const arrowDiv = document.createElement("div");
-            arrowDiv.className = "arrow";
-            arrowDiv.textContent = direction;
-            puzzleContainer.appendChild(arrowDiv);
-          }
-
-          // Display current puzzle state
-          const puzzle = createPuzzle(solution[i]);
-          const stepContainer = document.createElement("div");
-          stepContainer.classList.add("step-container");
-          stepContainer.appendChild(puzzle);
-
-          puzzleContainer.appendChild(stepContainer);
-          i++;
-          if (i >= solution.length) {
-            clearInterval(interval);
-            loading.style.display = "none"; // Hide loading message after solving
-          }
-        }, 1000);
-      };
-
-      worker.onerror = function (error) {
-        alert("Error solving the puzzle: " + error.message);
-        loading.style.display = "none";
-      };
-    }
-
-    // Display initial puzzle state
-    createPuzzle(currentState);
-  </script>
-</body>
-</html>
+  worker.onerror = function (error) {
+    alert("Error solving the puzzle: " + error.message);
+    loading.style.display = "none";
+  };
+}
