@@ -14,7 +14,7 @@ onmessage = function (e) {
   }
 
   if (!isSolvable(puzzle)) {
-    postMessage(null); // Puzzle not solvable
+    postMessage({ solution: null, rejectedMoves: [] }); // Puzzle not solvable
     return;
   }
 
@@ -41,6 +41,7 @@ onmessage = function (e) {
     const visited = new Set();
     const queue = new PriorityQueue();
     queue.enqueue([start, [], 0], manhattanDistance(start));
+    const rejectedMoves = []; // Store rejected moves for display
 
     const dirs = [
       [-1, 0], [1, 0], [0, -1], [0, 1]
@@ -52,7 +53,7 @@ onmessage = function (e) {
       if (visited.has(key)) continue;
       visited.add(key);
 
-      if (isGoal(curr)) return [...path, curr];
+      if (isGoal(curr)) return { solution: [...path, curr], rejectedMoves };
 
       if (cost >= MAX_DEPTH) continue; // depth limit added
 
@@ -69,12 +70,23 @@ onmessage = function (e) {
           [newState[zeroIdx], newState[ni]] = [newState[ni], newState[zeroIdx]];
           const newCost = cost + 1;
           const priority = newCost + manhattanDistance(newState);
+          
+          if (visited.has(newState.join(","))) {
+            rejectedMoves.push({ state: newState, reason: "Already visited" });
+            continue;
+          }
+
+          if (priority >= manhattanDistance(curr)) {
+            rejectedMoves.push({ state: newState, reason: "Higher cost" });
+            continue;
+          }
+
           queue.enqueue([newState, [...path, curr], newCost], priority);
         }
       }
     }
 
-    return null;
+    return { solution: null, rejectedMoves }; // If no solution is found
   }
 
   function manhattanDistance(state) {
@@ -99,6 +111,6 @@ onmessage = function (e) {
   }
 
   // Solving the puzzle
-  const solution = branchAndBound(puzzle);
-  postMessage(solution); // Send the solution back to main thread
+  const { solution, rejectedMoves } = branchAndBound(puzzle);
+  postMessage({ solution, rejectedMoves }); // Send the solution and rejected moves back to main thread
 };
