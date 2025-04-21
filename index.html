@@ -136,4 +136,31 @@
         const [curr, path, cost] = queue.dequeue();
         const key = curr.join(",");
         if (visited.has(key)) continue;
-        visited.add(key)
+        visited.add(key);
+
+        if (isGoal(curr)) return [...path, curr];
+
+        const zeroIdx = curr.indexOf(0);
+        const r = Math.floor(zeroIdx / 4);
+        const c = zeroIdx % 4;
+
+        for (const [dr, dc] of dirs) {
+          const nr = r + dr;
+          const nc = c + dc;
+          if (nr >= 0 && nr < 4 && nc >= 0 && nc < 4) {
+            const ni = nr * 4 + nc;
+            const newState = curr.slice();
+            [newState[zeroIdx], newState[ni]] = [newState[ni], newState[zeroIdx]];
+            const newCost = cost + 1;
+            const priority = newCost + manhattanDistance(newState);
+            queue.enqueue([newState, [...path, curr], newCost], priority);
+          }
+        }
+      }
+      return null;
+    }
+
+    randomizePuzzle();
+  </script>
+</body>
+</html>
