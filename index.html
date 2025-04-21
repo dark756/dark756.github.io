@@ -6,7 +6,7 @@
   <title>15-Puzzle Branch & Bound Visualization</title>
   <style>
     body { font-family: sans-serif; padding: 20px; }
-    #controls { margin-bottom: 10px; }
+    #controls { margin-bottom: 10px; display: flex; gap: 10px; align-items: center; }
     #grid { display: grid; grid-template-columns: repeat(4, 60px); grid-gap: 5px; margin-bottom: 20px; }
     .tile { width: 60px; height: 60px; line-height: 60px; text-align: center; background: #eee; user-select: none; font-size: 20px; position: relative; }
     .empty { background: #fff; }
@@ -29,6 +29,9 @@
   <div id="controls">
     <button id="shuffleBtn">Shuffle</button>
     <button id="solveBtn">Solve</button>
+    <label for="depthRange">Shuffle Depth: <span id="depthValue">5</span></label>
+    <input type="range" id="depthRange" min="3" max="20" value="5" />
+    <small>(3-20)</small>
   </div>
   <div id="grid"></div>
   <div id="branches"></div>
@@ -38,8 +41,12 @@
     const gridEl = document.getElementById('grid');
     const branchesEl = document.getElementById('branches');
     const solutionStepsEl = document.getElementById('solutionSteps');
+    const depthSlider = document.getElementById('depthRange');
+    const depthValue = document.getElementById('depthValue');
     let startState = [];
     const solvedState = Array.from({length:15}, (_,i)=>i+1).concat(0);
+
+    depthSlider.oninput = () => depthValue.textContent = depthSlider.value;
 
     function render(state) {
       gridEl.innerHTML = '';
@@ -76,7 +83,7 @@
     function shuffle() {
       let state = solvedState.slice();
       let prevZero = state.indexOf(0);
-      const depth = Math.floor(Math.random() * 5) + 1;
+      const depth = parseInt(depthSlider.value);
       for (let i = 0; i < depth; i++) {
         const nexts = neighbors(state).filter(s => s.indexOf(0) !== prevZero);
         const pick = nexts[Math.floor(Math.random() * nexts.length)];
