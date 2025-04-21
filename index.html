@@ -1,8 +1,8 @@
 <!DOCTYPE html>
 <html lang="en">
 <head>
-  <meta charset="UTF-8">
-  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0"/>
   <title>15 Puzzle Solver - Branch and Bound</title>
   <style>
     body {
@@ -52,7 +52,7 @@
 
     function createPuzzle(state) {
       puzzle.innerHTML = "";
-      state.forEach((val, i) => {
+      state.forEach((val) => {
         const tile = document.createElement("div");
         tile.className = "tile" + (val === 0 ? " empty" : "");
         tile.textContent = val === 0 ? "" : val;
@@ -69,14 +69,34 @@
       return array;
     }
 
+    function isSolvable(puzzle) {
+      let invCount = 0;
+      for (let i = 0; i < 15; i++) {
+        for (let j = i + 1; j < 16; j++) {
+          if (puzzle[i] && puzzle[j] && puzzle[i] > puzzle[j]) invCount++;
+        }
+      }
+      const rowFromBottom = 3 - Math.floor(puzzle.indexOf(0) / 4);
+      return (invCount + rowFromBottom) % 2 === 0;
+    }
+
     function randomizePuzzle() {
-      tiles = getRandomPuzzle();
+      do {
+        tiles = getRandomPuzzle();
+      } while (!isSolvable(tiles));
       createPuzzle(tiles);
     }
 
     function solvePuzzle() {
+      if (!isSolvable(tiles)) {
+        alert("Puzzle is not solvable!");
+        return;
+      }
       const solution = branchAndBound(tiles);
-      if (!solution) return alert("No solution found!");
+      if (!solution) {
+        alert("No solution found!");
+        return;
+      }
 
       let i = 0;
       const interval = setInterval(() => {
@@ -108,7 +128,7 @@
     }
 
     function branchAndBound(start) {
-      const PriorityQueue = class {
+      class PriorityQueue {
         constructor() {
           this.data = [];
         }
@@ -122,7 +142,7 @@
         isEmpty() {
           return this.data.length === 0;
         }
-      };
+      }
 
       const visited = new Set();
       const queue = new PriorityQueue();
@@ -157,6 +177,7 @@
           }
         }
       }
+
       return null;
     }
 
