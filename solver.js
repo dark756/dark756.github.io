@@ -1,7 +1,7 @@
 onmessage = function (e) {
   const puzzle = e.data.puzzle;
 
-  // Check if puzzle is solvable (can be skipped if you've already ensured solvability)
+  // Check if puzzle is solvable
   function isSolvable(puzzle) {
     let invCount = 0;
     for (let i = 0; i < 15; i++) {
