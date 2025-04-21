@@ -1,216 +1,192 @@
 <!DOCTYPE html>
 <html lang="en">
 <head>
-  <meta charset="UTF-8" />
-  <meta name="viewport" content="width=device-width, initial-scale=1.0"/>
-  <title>15 Puzzle Solver - Branch and Bound</title>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>15-Puzzle Branch & Bound Visualization</title>
   <style>
-    body {
-      font-family: sans-serif;
-      display: flex;
-      flex-direction: column;
-      align-items: center;
-      padding: 20px;
-    }
-    #puzzle-container {
-      display: flex;
-      flex-direction: column;
-      align-items: center;
-      gap: 30px;
-      margin-bottom: 20px;
-    }
-    .puzzle {
-      display: grid;
-      grid-template-columns: repeat(4, 80px);
-      grid-template-rows: repeat(4, 80px);
-      gap: 5px;
-      margin-bottom: 10px;
-    }
-    .tile {
-      width: 80px;
-      height: 80px;
-      display: flex;
-      align-items: center;
-      justify-content: center;
-      background-color: #ccc;
-      font-size: 24px;
-      font-weight: bold;
-      cursor: default;
-    }
-    .empty {
-      background-color: #fff;
-    }
-    button {
-      margin: 5px;
-      padding: 10px 20px;
-      font-size: 16px;
-    }
-    #loading {
-      display: none;
-      font-size: 18px;
-      margin-top: 20px;
-    }
-    .arrow {
-      font-size: 24px;
-      margin-top: 10px;
-    }
-    .step-container {
-      display: flex;
-      align-items: center;
-      gap: 10px;
-    }
-    .rejected-moves {
-      margin-top: 20px;
-    }
-    .rejected-move {
-      margin-bottom: 10px;
-      padding: 10px;
-      border: 1px solid #ccc;
-      background-color: #f9f9f9;
-    }
+    body { font-family: sans-serif; padding: 20px; }
+    #controls { margin-bottom: 10px; }
+    #grid { display: grid; grid-template-columns: repeat(4, 60px); grid-gap: 5px; margin-bottom: 20px; }
+    .tile { width: 60px; height: 60px; line-height: 60px; text-align: center; background: #eee; user-select: none; font-size: 20px; position: relative; }
+    .empty { background: #fff; }
+    #branches { margin-bottom: 20px; max-height: 200px; overflow-y: auto; }
+    .branch { font-size: 12px; margin: 2px 0; }
+    #solutionSteps { display: flex; flex-direction: column; gap: 20px; }
+    .stepContainer { display: flex; align-items: flex-start; gap: 20px; }
+    .stepBlock { display: flex; flex-direction: column; align-items: center; }
+    .stepLabel { font-size: 14px; margin-bottom: 4px; font-weight: bold; }
+    .stepGrid { display: grid; grid-template-columns: repeat(4, 40px); grid-gap: 3px; }
+    .stepGrid .tile { width: 40px; height: 40px; line-height: 40px; font-size: 14px; }
+    .rejects { display: flex; flex-direction: row; gap: 10px; }
+    .rejectBlock { display: flex; flex-direction: column; align-items: center; }
+    .rejectLabel { font-size: 12px; margin-bottom: 2px; }
+    .rejectGrid { display: grid; grid-template-columns: repeat(4, 20px); grid-gap: 2px; opacity: 0.5; }
+    .rejectGrid .tile { width: 20px; height: 20px; line-height: 20px; font-size: 10px; }
   </style>
 </head>
 <body>
-  <h1>15 Puzzle Solver - Branch and Bound</h1>
-  <div id="puzzle-container"></div>
-  <button onclick="solvePuzzle()">Solve Puzzle</button>
-  <div id="loading">Solving the puzzle... Please wait!</div>
+  <div id="controls">
+    <button id="shuffleBtn">Shuffle</button>
+    <button id="solveBtn">Solve</button>
+  </div>
+  <div id="grid"></div>
+  <div id="branches"></div>
+  <div id="solutionSteps"></div>
 
   <script>
-    const puzzleContainer = document.getElementById("puzzle-container");
-    const loading = document.getElementById("loading");
+    const gridEl = document.getElementById('grid');
+    const branchesEl = document.getElementById('branches');
+    const solutionStepsEl = document.getElementById('solutionSteps');
+    let startState = [];
+    const solvedState = Array.from({length:15}, (_,i)=>i+1).concat(0);
 
-    // Hardcoded puzzle state
-    const currentState = [
-      1, 2, 3, 4,
-      5, 6, 0, 8,
-      9, 10, 7, 11,
-      13, 14, 15, 12
-    ];
-
-    // Define directions for arrows
-    const directionArrows = {
-      up: "↑",
-      down: "↓",
-      left: "←",
-      right: "→"
-    };
-
-    function createPuzzle(state) {
-      const puzzle = document.createElement("div");
-      puzzle.classList.add("puzzle");
-
-      state.forEach((val) => {
-        const tile = document.createElement("div");
-        tile.className = "tile" + (val === 0 ? " empty" : "");
-        tile.textContent = val === 0 ? "" : val;
-        puzzle.appendChild(tile);
+    function render(state) {
+      gridEl.innerHTML = '';
+      state.forEach(v => {
+        const div = document.createElement('div');
+        div.className = 'tile' + (v===0 ? ' empty' : '');
+        div.textContent = v===0 ? '' : v;
+        gridEl.appendChild(div);
       });
-
-      return puzzle;
     }
 
-    function isSolvable(puzzle) {
-      let invCount = 0;
-      for (let i = 0; i < 15; i++) {
-        for (let j = i + 1; j < 16; j++) {
-          if (puzzle[i] && puzzle[j] && puzzle[i] > puzzle[j]) invCount++;
-        }
-      }
-      const rowFromBottom = 3 - Math.floor(puzzle.indexOf(0) / 4);
-      return (invCount + rowFromBottom) % 2 === 0;
+    function manhattan(s) {
+      return s.reduce((d,v,i) => {
+        if (!v) return d;
+        const [r1,c1] = [Math.floor(i/4), i%4];
+        const [r2,c2] = [Math.floor((v-1)/4), (v-1)%4];
+        return d + Math.abs(r1-r2) + Math.abs(c1-c2);
+      }, 0);
     }
 
-    function solvePuzzle() {
-      if (!isSolvable(currentState)) {
-        alert("Puzzle is not solvable!");
-        return;
-      }
-
-      // Show loading message
-      loading.style.display = "block";
-
-      // Initialize Web Worker for solving
-      const worker = new Worker("solver.js");
-
-      worker.postMessage({ puzzle: currentState });
-
-      // Receive solved steps and rejected moves from the Web Worker
-      worker.onmessage = function (event) {
-        const { solution, rejectedMoves } = event.data;
-        if (!solution) {
-          alert("No solution found!");
-          loading.style.display = "none";
-          return;
-        }
-
-        // Display solution steps
-        let i = 0;
-        const interval = setInterval(() => {
-          if (i > 0) {
-            // Calculate direction of move
-            const prevState = solution[i - 1];
-            const currState = solution[i];
-            
-            const zeroPrev = prevState.indexOf(0);
-            const zeroCurr = currState.indexOf(0);
-            const prevRow = Math.floor(zeroPrev / 4);
-            const prevCol = zeroPrev % 4;
-            const currRow = Math.floor(zeroCurr / 4);
-            const currCol = zeroCurr % 4;
-
-            let direction = '';
-            if (currRow === prevRow - 1) direction = directionArrows.up;
-            else if (currRow === prevRow + 1) direction = directionArrows.down;
-            else if (currCol === prevCol - 1) direction = directionArrows.left;
-            else if (currCol === prevCol + 1) direction = directionArrows.right;
-
-            const arrowDiv = document.createElement("div");
-            arrowDiv.className = "arrow";
-            arrowDiv.textContent = direction;
-            puzzleContainer.appendChild(arrowDiv);
-          }
-
-          // Display current puzzle state
-          const puzzle = createPuzzle(solution[i]);
-          const stepContainer = document.createElement("div");
-          stepContainer.classList.add("step-container");
-          stepContainer.appendChild(puzzle);
-
-          puzzleContainer.appendChild(stepContainer);
-          i++;
-          if (i >= solution.length) {
-            clearInterval(interval);
-            loading.style.display = "none"; // Hide loading message after solving
-          }
-        }, 1000);
-
-        // Display rejected moves
-        const rejectedContainer = document.createElement("div");
-        rejectedContainer.className = "rejected-moves";
-        rejectedContainer.innerHTML = "<h3>Rejected Moves:</h3>";
-
-        rejectedMoves.forEach(rejected => {
-          const rejectedDiv = document.createElement("div");
-          rejectedDiv.className = "rejected-move";
-          rejectedDiv.innerHTML = `
-            <p>Move: ${rejected.state.join(", ")}</p>
-            <p>Reason: ${rejected.reason}</p>
-          `;
-          rejectedContainer.appendChild(rejectedDiv);
+    function neighbors(state) {
+      const zero = state.indexOf(0);
+      const [r,c] = [Math.floor(zero/4), zero%4];
+      const dirs = [[1,0],[-1,0],[0,1],[0,-1]];
+      return dirs.map(([dr,dc]) => [r+dr,c+dc]).filter(([nr,nc]) => nr>=0 && nr<4 && nc>=0 && nc<4)
+        .map(([nr,nc]) => {
+          const ni = nr*4 + nc;
+          const copy = state.slice();
+          copy[zero] = copy[ni]; copy[ni] = 0;
+          return copy;
         });
-
-        puzzleContainer.appendChild(rejectedContainer);
-      };
-
-      worker.onerror = function (error) {
-        alert("Error solving the puzzle: " + error.message);
-        loading.style.display = "none";
-      };
     }
 
-    // Display initial puzzle state
-    createPuzzle(currentState);
+    function shuffle() {
+      let state = solvedState.slice();
+      let prevZero = state.indexOf(0);
+      const depth = Math.floor(Math.random() * 5) + 1;
+      for (let i = 0; i < depth; i++) {
+        const nexts = neighbors(state).filter(s => s.indexOf(0) !== prevZero);
+        const pick = nexts[Math.floor(Math.random() * nexts.length)];
+        prevZero = state.indexOf(0);
+        state = pick;
+      }
+      startState = state;
+      render(startState);
+      branchesEl.innerHTML = '';
+      solutionStepsEl.innerHTML = '';
+    }
+
+    async function solve() {
+      branchesEl.innerHTML = '';
+      solutionStepsEl.innerHTML = '';
+      const pq = [{state: startState, path: [startState], cost: 0, f: manhattan(startState)}];
+      const seen = new Set();
+      let solutionPath = null;
+      while (pq.length) {
+        pq.sort((a,b) => a.f - b.f);
+        const node = pq.shift();
+        const key = node.state.join(','); if (seen.has(key)) continue;
+        seen.add(key);
+        render(node.state);
+        branchesEl.innerHTML += `<div class="branch">expand f=${node.f} g=${node.cost}</div>`;
+        await new Promise(r => setTimeout(r, 150));
+        if (manhattan(node.state) === 0) { solutionPath = node.path; break; }
+        for (const child of neighbors(node.state)) {
+          const g = node.cost + 1, h = manhattan(child), f = g + h;
+          if (!solutionPath) pq.push({state: child, path: [...node.path, child], cost: g, f});
+        }
+      }
+      if (solutionPath) displaySolutionSteps(solutionPath);
+    }
+
+    function displaySolutionSteps(path) {
+      path.forEach((state, idx) => {
+        const g = idx;
+        const zero = state.indexOf(0);
+        const next = path[idx+1] || null;
+        const nextZero = next ? next.indexOf(0) : null;
+        const diff = next ? nextZero - zero : null;
+        let arrow = '';
+        if (diff === -4) arrow = '↑'; else if (diff === 4) arrow = '↓';
+        else if (diff === -1) arrow = '←'; else if (diff === 1) arrow = '→';
+
+        // compute rejected neighbors and their f-values
+        const rejects = neighbors(state)
+          .filter(n => !next || n.join(',') !== next.join(','))
+          .map(n => {
+            const gh = g + 1;
+            const hh = manhattan(n);
+            return {state: n, f: gh + hh};
+          });
+
+        const stepContainer = document.createElement('div');
+        stepContainer.className = 'stepContainer';
+
+        // main step block
+        const mainBlock = document.createElement('div');
+        mainBlock.className = 'stepBlock';
+        const label = document.createElement('div');
+        label.className = 'stepLabel';
+        const fval = manhattan(state) + g;
+        label.innerHTML = `Step ${idx} (<b>f=${fval}</b>)`;
+        mainBlock.appendChild(label);
+        const grid = document.createElement('div');
+        grid.className = 'stepGrid';
+        state.forEach((v,i) => {
+          const d = document.createElement('div');
+          d.className = 'tile' + (v===0 ? ' empty' : '');
+          if (i === zero && arrow) d.textContent = arrow;
+          else d.textContent = v === 0 ? '' : v;
+          grid.appendChild(d);
+        });
+        mainBlock.appendChild(grid);
+        stepContainer.appendChild(mainBlock);
+
+        // rejected blocks to the right
+        if (rejects.length) {
+          const rejCont = document.createElement('div');
+          rejCont.className = 'rejects';
+          rejects.forEach(r => {
+            const rb = document.createElement('div');
+            rb.className = 'rejectBlock';
+            const rlabel = document.createElement('div');
+            rlabel.className = 'rejectLabel';
+            rlabel.textContent = `f=${r.f}`;
+            rb.appendChild(rlabel);
+            const rgrid = document.createElement('div');
+            rgrid.className = 'rejectGrid';
+            r.state.forEach(v => {
+              const td = document.createElement('div');
+              td.className = 'tile' + (v===0 ? ' empty' : '');
+              td.textContent = v===0 ? '' : v;
+              rgrid.appendChild(td);
+            });
+            rb.appendChild(rgrid);
+            rejCont.appendChild(rb);
+          });
+          stepContainer.appendChild(rejCont);
+        }
+
+        solutionStepsEl.appendChild(stepContainer);
+      });
+    }
+
+    document.getElementById('shuffleBtn').onclick = shuffle;
+    document.getElementById('solveBtn').onclick = solve;
+    shuffle();
   </script>
 </body>
 </html>
