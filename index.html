@@ -48,14 +48,28 @@
 <body>
   <h1>15 Puzzle Solver - Branch and Bound</h1>
   <div id="puzzle"></div>
-  <button onclick="randomizePuzzle()">Randomize</button>
-  <button onclick="solvePuzzle()">Solve</button>
+  <button onclick="solvePuzzle()">Solve Random Puzzle</button>
   <div id="loading">Solving the puzzle... Please wait!</div>
 
   <script>
     const puzzle = document.getElementById("puzzle");
     const loading = document.getElementById("loading");
-    let tiles = [];
+
+    // Hardcoded puzzle states
+    const puzzleStates = [
+      [1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14, 0],
+      [1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 0, 13, 14],
+      [1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 0, 12, 13, 11, 14],
+      [1, 2, 3, 4, 0, 6, 7, 8, 9, 5, 10, 11, 13, 12, 14],
+      [1, 2, 3, 4, 5, 6, 7, 8, 9, 0, 10, 11, 12, 13, 14],
+      [1, 2, 3, 4, 5, 6, 0, 7, 9, 8, 10, 11, 12, 13, 14],
+      [1, 2, 3, 4, 5, 0, 7, 6, 8, 9, 10, 11, 12, 13, 14],
+      [1, 0, 3, 4, 5, 2, 7, 8, 9, 10, 6, 11, 12, 13, 14],
+      [1, 2, 3, 4, 0, 5, 7, 8, 9, 10, 11, 6, 12, 13, 14],
+      [1, 2, 3, 0, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14]
+    ];
+
+    let currentState = puzzleStates[Math.floor(Math.random() * puzzleStates.length)];
 
     function createPuzzle(state) {
       puzzle.innerHTML = "";
@@ -65,15 +79,6 @@
         tile.textContent = val === 0 ? "" : val;
         puzzle.appendChild(tile);
       });
-    }
-
-    function getRandomPuzzle() {
-      const array = [...Array(16).keys()];
-      for (let i = array.length - 1; i > 0; i--) {
-        const j = Math.floor(Math.random() * (i + 1));
-        [array[i], array[j]] = [array[j], array[i]];
-      }
-      return array;
     }
 
     function isSolvable(puzzle) {
@@ -87,15 +92,8 @@
       return (invCount + rowFromBottom) % 2 === 0;
     }
 
-    function randomizePuzzle() {
-      do {
-        tiles = getRandomPuzzle();
-      } while (!isSolvable(tiles));
-      createPuzzle(tiles);
-    }
-
     function solvePuzzle() {
-      if (!isSolvable(tiles)) {
+      if (!isSolvable(currentState)) {
         alert("Puzzle is not solvable!");
         return;
       }
@@ -106,7 +104,7 @@
       // Initialize Web Worker for solving
       const worker = new Worker("solver.js");
 
-      worker.postMessage({ puzzle: tiles });
+      worker.postMessage({ puzzle: currentState });
 
       // Receive solved steps from the Web Worker
       worker.onmessage = function (event) {
@@ -134,7 +132,7 @@
       };
     }
 
-    randomizePuzzle();
+    createPuzzle(currentState);
   </script>
 </body>
 </html>
