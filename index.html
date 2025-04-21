@@ -3,7 +3,7 @@
 <head>
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
-  <title>15 Puzzle Solver</title>
+  <title>15 Puzzle Solver - Branch and Bound</title>
   <style>
     body {
       font-family: sans-serif;
@@ -41,7 +41,7 @@
   </style>
 </head>
 <body>
-  <h1>15 Puzzle Solver</h1>
+  <h1>15 Puzzle Solver - Branch and Bound</h1>
   <div id="puzzle"></div>
   <button onclick="randomizePuzzle()">Randomize</button>
   <button onclick="solvePuzzle()">Solve</button>
@@ -75,7 +75,7 @@
     }
 
     function solvePuzzle() {
-      const solution = bfs(tiles);
+      const solution = branchAndBound(tiles);
       if (!solution) return alert("No solution found!");
 
       let i = 0;
@@ -86,40 +86,6 @@
       }, 500);
     }
 
-    function bfs(start) {
-      const visited = new Set();
-      const queue = [[start, []]];
-
-      const dirs = [
-        [-1, 0], [1, 0], [0, -1], [0, 1]
-      ];
-
-      while (queue.length > 0) {
-        const [curr, path] = queue.shift();
-        const key = curr.join(",");
-        if (visited.has(key)) continue;
-        visited.add(key);
-
-        if (isGoal(curr)) return [...path, curr];
-
-        const zeroIdx = curr.indexOf(0);
-        const r = Math.floor(zeroIdx / 4);
-        const c = zeroIdx % 4;
-
-        for (const [dr, dc] of dirs) {
-          const nr = r + dr;
-          const nc = c + dc;
-          if (nr >= 0 && nr < 4 && nc >= 0 && nc < 4) {
-            const ni = nr * 4 + nc;
-            const newState = curr.slice();
-            [newState[zeroIdx], newState[ni]] = [newState[ni], newState[zeroIdx]];
-            queue.push([newState, [...path, curr]]);
-          }
-        }
-      }
-      return null;
-    }
-
     function isGoal(state) {
       for (let i = 0; i < 15; i++) {
         if (state[i] !== i + 1) return false;
@@ -127,7 +93,47 @@
       return state[15] === 0;
     }
 
-    randomizePuzzle();
-  </script>
-</body>
-</html>
+    function manhattanDistance(state) {
+      let dist = 0;
+      for (let i = 0; i < 16; i++) {
+        if (state[i] !== 0) {
+          const goalRow = Math.floor((state[i] - 1) / 4);
+          const goalCol = (state[i] - 1) % 4;
+          const currRow = Math.floor(i / 4);
+          const currCol = i % 4;
+          dist += Math.abs(goalRow - currRow) + Math.abs(goalCol - currCol);
+        }
+      }
+      return dist;
+    }
+
+    function branchAndBound(start) {
+      const PriorityQueue = class {
+        constructor() {
+          this.data = [];
+        }
+        enqueue(item, priority) {
+          this.data.push({ item, priority });
+          this.data.sort((a, b) => a.priority - b.priority);
+        }
+        dequeue() {
+          return this.data.shift().item;
+        }
+        isEmpty() {
+          return this.data.length === 0;
+        }
+      };
+
+      const visited = new Set();
+      const queue = new PriorityQueue();
+      queue.enqueue([start, [], 0], manhattanDistance(start));
+
+      const dirs = [
+        [-1, 0], [1, 0], [0, -1], [0, 1]
+      ];
+
+      while (!queue.isEmpty()) {
+        const [curr, path, cost] = queue.dequeue();
+        const key = curr.join(",");
+        if (visited.has(key)) continue;
+        visited.add(key)
