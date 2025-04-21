@@ -1,4 +1,9 @@
 link : https://dark756.github.io/
+Members:
+Gukaran Singh Ahuja 16010123129	
+Girish Chaudhari 16010123125
+Gauri Deshmukh 16010123124
+
 
 
 # 15-Puzzle Branch and Bound Visualizer - User Guide
