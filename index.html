@@ -38,6 +38,11 @@
       padding: 10px 20px;
       font-size: 16px;
     }
+    #loading {
+      display: none;
+      font-size: 18px;
+      margin-top: 20px;
+    }
   </style>
 </head>
 <body>
@@ -45,9 +50,11 @@
   <div id="puzzle"></div>
   <button onclick="randomizePuzzle()">Randomize</button>
   <button onclick="solvePuzzle()">Solve</button>
+  <div id="loading">Solving the puzzle... Please wait!</div>
 
   <script>
     const puzzle = document.getElementById("puzzle");
+    const loading = document.getElementById("loading");
     let tiles = [];
 
     function createPuzzle(state) {
@@ -92,99 +99,40 @@
         alert("Puzzle is not solvable!");
         return;
       }
-      const solution = branchAndBound(tiles);
-      if (!solution) {
-        alert("No solution found!");
-        return;
-      }
 
-      let i = 0;
-      const interval = setInterval(() => {
-        createPuzzle(solution[i]);
-        i++;
-        if (i >= solution.length) clearInterval(interval);
-      }, 500);
-    }
+      // Show loading message
+      loading.style.display = "block";
 
-    function isGoal(state) {
-      for (let i = 0; i < 15; i++) {
-        if (state[i] !== i + 1) return false;
-      }
-      return state[15] === 0;
-    }
+      // Initialize Web Worker for solving
+      const worker = new Worker("solver.js");
 
-    function manhattanDistance(state) {
-      let dist = 0;
-      for (let i = 0; i < 16; i++) {
-        if (state[i] !== 0) {
-          const goalRow = Math.floor((state[i] - 1) / 4);
-          const goalCol = (state[i] - 1) % 4;
-          const currRow = Math.floor(i / 4);
-          const currCol = i % 4;
-          dist += Math.abs(goalRow - currRow) + Math.abs(goalCol - currCol);
+      worker.postMessage({ puzzle: tiles });
+
+      // Receive solved steps from the Web Worker
+      worker.onmessage = function (event) {
+        const solution = event.data;
+        if (!solution) {
+          alert("No solution found!");
+          loading.style.display = "none";
+          return;
         }
-      }
-      return dist;
+
+        let i = 0;
+        const interval = setInterval(() => {
+          createPuzzle(solution[i]);
+          i++;
+          if (i >= solution.length) {
+            clearInterval(interval);
+            loading.style.display = "none"; // Hide loading message after solving
+          }
+        }, 500);
+      };
+
+      worker.onerror = function (error) {
+        alert("Error solving the puzzle: " + error.message);
+        loading.style.display = "none";
+      };
     }
-
-    function branchAndBound(start) {
-  const MAX_DEPTH = 50; // limit search depth
-
-  class PriorityQueue {
-    constructor() {
-      this.data = [];
-    }
-    enqueue(item, priority) {
-      this.data.push({ item, priority });
-      this.data.sort((a, b) => a.priority - b.priority);
-    }
-    dequeue() {
-      return this.data.shift().item;
-    }
-    isEmpty() {
-      return this.data.length === 0;
-    }
-  }
-
-  const visited = new Set();
-  const queue = new PriorityQueue();
-  queue.enqueue([start, [], 0], manhattanDistance(start));
-
-  const dirs = [
-    [-1, 0], [1, 0], [0, -1], [0, 1]
-  ];
-
-  while (!queue.isEmpty()) {
-    const [curr, path, cost] = queue.dequeue();
-    const key = curr.join(",");
-    if (visited.has(key)) continue;
-    visited.add(key);
-
-    if (isGoal(curr)) return [...path, curr];
-
-    if (cost >= MAX_DEPTH) continue; // depth limit added
-
-    const zeroIdx = curr.indexOf(0);
-    const r = Math.floor(zeroIdx / 4);
-    const c = zeroIdx % 4;
-
-    for (const [dr, dc] of dirs) {
-      const nr = r + dr;
-      const nc = c + dc;
-      if (nr >= 0 && nr < 4 && nc >= 0 && nc < 4) {
-        const ni = nr * 4 + nc;
-        const newState = curr.slice();
-        [newState[zeroIdx], newState[ni]] = [newState[ni], newState[zeroIdx]];
-        const newCost = cost + 1;
-        const priority = newCost + manhattanDistance(newState);
-        queue.enqueue([newState, [...path, curr], newCost], priority);
-      }
-    }
-  }
-
-  return null;
-}
-
 
     randomizePuzzle();
   </script>
